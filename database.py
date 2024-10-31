@@ -1,6 +1,6 @@
 import sqlite3
 
-from objects import Feedback, Poll, Question, ServiceTicket, User
+from models import Feedback, Dialog, Question, ServiceTicket, User
 
 class Database:
     def __init__(self, db_file: str):
@@ -257,7 +257,7 @@ class Database:
         self.conn.commit()
         
         
-    def insert_poll(self, poll: Poll):
+    def insert_poll(self, poll: Dialog):
         self.cursor.execute("""
             SELECT MAX(id) FROM polls
             """)
@@ -277,7 +277,7 @@ class Database:
         self.conn.commit()
         
         
-    def remove_poll(self, poll: Poll):
+    def remove_poll(self, poll: Dialog):
         self.cursor.execute(
             """
             DELETE FROM polls WHERE id = ?

@@ -1,4 +1,4 @@
-from objects import ServiceTicket
+from models import ServiceTicket
 
 class ServicesService:
     def __init__(self, db):
