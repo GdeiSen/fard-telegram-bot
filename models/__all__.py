@@ -1,9 +1,3 @@
-"""
-Objects module
-
-This module contains all the objects used in the bot.
-"""
-
 from models.feedback import Feedback
 from models.dialog import Dialog
 from models.dialog_option import Option

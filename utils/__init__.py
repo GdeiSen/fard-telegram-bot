@@ -1,2 +1,0 @@
-from utils.dict_extractor import DictExtractor
-from utils.poll_json_converter import json_to_sequences

@@ -1,4 +1,4 @@
-from objects import Feedback
+from models import Feedback
 
 class FeedbacksService:
     def __init__(self, db):

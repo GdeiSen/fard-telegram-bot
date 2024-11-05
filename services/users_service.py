@@ -1,4 +1,4 @@
-from objects import User
+from models import User
 
 class UsersService:
     def __init__(self, db):
