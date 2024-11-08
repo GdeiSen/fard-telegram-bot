@@ -35,8 +35,8 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-json_file = "./poll.json"
-poll = json_to_sequences(json_file)
+locales = "./locales/localisation_uni.py"
+poll = json_to_sequences(locales)
 db = Database("database.db")
 db.create_tables()
 
@@ -50,7 +50,7 @@ users_service = UsersService(db)
 def get_user_id(update: Update) -> int:
     try:
         return update.message.from_user.id
-    except Exception as e:
+    except Exception:
         return update.callback_query.from_user.id
 
 
@@ -72,13 +72,12 @@ async def delete_buffer_message(
         await context.bot.delete_message(
             chat_id=message_td.chat_id, message_id=message_td.message_id
         )
-    except Exception as e:
+    except Exception:
         try:
             await context.bot.delete_message(
                 chat_id=message_td.chat_id, message_id=message_td.message_id
             )
-        except Exception as e:
-            print(e)
+        except Exception:
             pass
     context.user_data[BUFFER_MESSAGE] = []
 
@@ -294,7 +293,6 @@ async def start_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int |
         )
         context.user_data[FIRST_START] = False
         return SELECTING_ACTION
-
     else:
         await send_message(
             update,
@@ -510,7 +508,6 @@ async def set_multi_dialog_item(
         except ValueError:
             args = None
     text_input = context.user_data.pop(BUFFER_DIALOG_ANSWER, None)
-
     answer: str | None = None
     if text_input:
         answer = text_input
@@ -817,7 +814,7 @@ async def set_service_image(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     set_buffer_message(update, context)
     return UPLOADING
 
-
+# NEED TO BE REMOVED
 async def send_service_ticket(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
