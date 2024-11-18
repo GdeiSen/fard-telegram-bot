@@ -1,5 +1,5 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "exclude": ["bot.py"]
+  "exclude": ["./bot.py"]
 }

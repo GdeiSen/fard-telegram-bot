@@ -1,2 +1,2 @@
-from utils.dict_extractor import DictExtractor
+from utils.locales_extractor import DictExtractor
 from utils.dialog_converter import json_to_sequences

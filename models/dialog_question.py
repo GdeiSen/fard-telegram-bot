@@ -1,7 +1,7 @@
 class Question:
-    def __init__(self, id: int, text: str, poll_id: int | None = None, answer: str | None = None, options_ids: list[int] | None = None):
+    def __init__(self, id: int, text: str, dialog_id: int | None = None, options_ids: list[int] | None = None, type: int | None = -1):
         self.id = id
         self.text = text
-        self.answer : str | None = answer
-        self.options_ids : list[int] | None = options_ids   
-        self.poll_id : int | None = poll_id
+        self.type = type
+        self.options_ids : list[int] | None = options_ids
+        self.dialog_id : int | None = dialog_id

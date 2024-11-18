@@ -3,6 +3,7 @@ import datetime
 import logging
 from typing import Awaitable, Callable
 
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -15,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from assets.dict import Data
+from locales.localisation_uni import Data as LocalisationData
 from database import Database
 from models import (
     Answer,
@@ -36,11 +37,13 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 locales = "./locales/localisation_uni.py"
-poll = json_to_sequences(locales)
+poll_dialog = json_to_sequences("./assets/poll_dialog.json")
+service_dialog = json_to_sequences("./assets/service_dialog.json")
+profile_dialog = json_to_sequences("./assets/profile_dialog.json")
 db = Database("database.db")
 db.create_tables()
 
-extractor = DictExtractor(Data)
+extractor = DictExtractor(LocalisationData)
 feedbacks_service = FeedbacksService(db)
 services_service = ServicesService(db)
 poll_service = PollService(db)
@@ -136,6 +139,8 @@ def create_keyboard(rows: list[list[tuple[str, int | str]]]) -> InlineKeyboardMa
 
 
 async def poll_answer_save_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
     dialog_id: int,
     sequence_id: int,
     question_id: int,
@@ -143,12 +148,22 @@ async def poll_answer_save_callback(
     answer: str | None,
     state: int,
 ) -> None:
-    print(
-        f"Poll answer save callback: {dialog_id}, {sequence_id}, {question_id}, {option_id}, {answer}, {state}"
-    )
+    user_id = get_user_id(update)
+    user = await users_service.get_user(user_id)
+    answer_obj = Answer(0, user_id, dialog_id, sequence_id, question_id, answer, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print(answer_obj.id)
+    print(answer_obj.user_id)
+    answer_obj.dialog_id = answer_obj.dialog_id[0]
+    print(answer_obj.sequence_id)
+    print(answer_obj.question_id)
+    print(answer_obj.answer)
+    print(answer_obj.created_at)
+    await poll_service.insert_answer(user, answer_obj)
 
 
 async def service_answer_save_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
     dialog_id: int,
     sequence_id: int,
     question_id: int,
@@ -156,7 +171,43 @@ async def service_answer_save_callback(
     answer: str,
     state: int,
 ) -> None:
-    pass
+    user_id = get_user_id(update)
+    user:User = await users_service.get_user(user_id)
+    print(dialog_id)
+    print(sequence_id)
+    print(question_id)
+    print(option_id)
+    print(answer)
+    print(state)
+
+
+async def profile_answer_save_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    dialog_id: int,
+    sequence_id: int,
+    question_id: int,
+    option_id: int,
+    answer: str,
+    state: int,
+) -> None:
+    user_id = get_user_id(update)
+    user:User = await users_service.get_user(user_id)
+    if question_id == 0:
+        user.last_name = answer
+    elif question_id == 1:
+        user.first_name = answer
+    elif question_id == 2:
+        user.middle_name = answer
+    elif question_id == 3:
+        user.legal_entity = answer
+    await users_service.update_user(user)
+    context.user_data[USER_NAME] = (
+        (user.last_name or "") + " " +
+        (user.first_name or "") + " " +
+        (user.middle_name or "")
+    ).strip()
+    context.user_data[USER_LEGAL_ENTITY] = user.legal_entity
 
 
 LPR_ROLE = 10011
@@ -166,7 +217,7 @@ SELECTING_ACTION = 1
 (
     SELECTING_SERVICE_ACTION,
     SELECTING_PROFILE_ACTION,
-    SELECTING_POLLING_ACTION,
+    SELECTING_POLL_ACTION,
     SELECTING_FEEDBACK_ACTION,
 ) = range(100, 104)
 
@@ -175,53 +226,61 @@ SELECTING_ACTION = 1
     SETTING_SERVICE_DESCRIPTION_LOCATION,
     SETTING_SERVICE_DESCRIPTION_IMAGE,
     SENDING_SERVICE,
-    SETTING_PROFILE_NAME,
+    SETTING_USER_NAME,
     SETTING_PROFILE_OBJECT,
     SETTING_PROFILE_LEGAL_ENTITY,
-    POLLING,
-    SETTING_POLL_QUESTION,
-    SENDING_POLL_ANSWER,
+    SETTING_DIALOG_ITEM,
+    SELECTING_DIALOG_ANSWER,
+    SELECTING_POLL_ACTION,
+    TYPING_DIALOG_ANSWER,
+    UPLOADING_DIALOG_ANSWER,
+    CANCELING_DIALOG_ITEM,
     SETTING_FEEDBACK,
     SENDING_FEEDBACK,
-) = range(200, 212)
+) = range(200, 215)
 
-(TYPING, UPLOADING, CANCELING, CLEARING) = range(300, 304)
+(
+    TYPING,
+    UPLOADING,
+    CANCELING,
+    CLEARING,
+    SELECTING
+) = range(300, 305)
 
 END = ConversationHandler.END
 
 (
-    BUFFER_DESCRIPTION,
-    BUFFER_LOCATION,
-    BUFFER_IMAGE,
+    SERVICE_DESCRIPTION,
+    SERVICE_LOCATION,
+    SERVICE_IMAGE,
     ACTIVE_INPUT_MODE,
+    BUFFER_IMAGE,
     BUFFER_MESSAGE,
-    BUFFER_NAME,
-    BUFFER_LEGAL_ENTITY,
-    BUFFER_OBJECT,
-    BUFFER_POLL_QUESTION,
+    USER_NAME,
+    USER_LEGAL_ENTITY,
+    USER_OBJECT,
     BUFFER_POLL,
     BUFFER_DIALOG_ANSWER,
-    BUFFER_QUESTION_MESSAGE,
-    ACTIVE_MULTI_DIALOG_SEQUENCE_ID,
-    ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX,
-    ACTIVE_MULTI_DIALOG,
-    BUFFER_FEEDBACK,
-    BUFFER_DIALOG_ANSWERS,
-    BUFFER_LANGUAGE,
-    FIRST_START,
-    STATUS,
-) = range(400, 420)
+    ACTIVE_DIALOG_SEQUENCE_ID,
+    ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX,
+    ACTIVE_DIALOG,
+    ACTIVE_DIALOG_TRACE,
+    FEEDBACK_BUFFER,
+    FIRST_START
+) = range(400, 417)
 
-_constates_map = {
-    SETTING_SERVICE_DESCRIPTION: BUFFER_DESCRIPTION,
-    SETTING_SERVICE_DESCRIPTION_LOCATION: BUFFER_LOCATION,
-    SETTING_PROFILE_OBJECT: BUFFER_OBJECT,
-    SETTING_PROFILE_NAME: BUFFER_NAME,
-    SETTING_PROFILE_LEGAL_ENTITY: BUFFER_LEGAL_ENTITY,
-    SETTING_POLL_QUESTION: BUFFER_DIALOG_ANSWER,
-    SETTING_FEEDBACK: BUFFER_FEEDBACK,
-    UPLOADING: BUFFER_IMAGE,
-    SETTING_SERVICE_DESCRIPTION_IMAGE: BUFFER_IMAGE,
+
+_text_handler_routes_map = {
+    SELECTING_FEEDBACK_ACTION: FEEDBACK_BUFFER,
+    SELECTING_POLL_ACTION: BUFFER_DIALOG_ANSWER,
+    SELECTING_PROFILE_ACTION: BUFFER_DIALOG_ANSWER,
+    SELECTING_SERVICE_ACTION: BUFFER_DIALOG_ANSWER
+}
+_image_handler_routes_map = {
+    SETTING_DIALOG_ITEM: BUFFER_IMAGE,
+    SELECTING_POLL_ACTION: BUFFER_IMAGE,
+    SELECTING_PROFILE_ACTION: BUFFER_IMAGE,
+    SELECTING_SERVICE_ACTION: BUFFER_IMAGE
 }
 _service_input_modes = [
     SETTING_SERVICE_DESCRIPTION,
@@ -229,19 +288,21 @@ _service_input_modes = [
     SETTING_SERVICE_DESCRIPTION_IMAGE,
 ]
 _profile_input_modes = [
-    SETTING_PROFILE_NAME,
+    SETTING_USER_NAME,
     SETTING_PROFILE_OBJECT,
     SETTING_PROFILE_LEGAL_ENTITY,
 ]
-_polling_input_modes = [SETTING_POLL_QUESTION, SENDING_POLL_ANSWER]
-_feedback_input_modes = [SETTING_FEEDBACK]
-_multi_dialogs_callbacks = {
-    SETTING_POLL_QUESTION: poll_answer_save_callback,
-    SENDING_POLL_ANSWER: poll_answer_save_callback,
-    SETTING_SERVICE_DESCRIPTION: service_answer_save_callback,
-    SETTING_SERVICE_DESCRIPTION_LOCATION: service_answer_save_callback,
-    SETTING_SERVICE_DESCRIPTION_IMAGE: service_answer_save_callback,
-    SENDING_SERVICE: service_answer_save_callback,
+_polling_input_modes = [
+    SETTING_DIALOG_ITEM,
+    SELECTING_DIALOG_ANSWER
+]
+_feedback_input_modes = [
+    SETTING_FEEDBACK
+]
+_dialog_callbacks = {
+    SELECTING_SERVICE_ACTION: service_answer_save_callback,
+    SELECTING_PROFILE_ACTION: profile_answer_save_callback,
+    SELECTING_POLL_ACTION: poll_answer_save_callback
 }
 
 
@@ -251,7 +312,6 @@ async def start_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int |
     payload = context.args[0] if context.args else None
     user_id = update.message.from_user.id
     user = await users_service.get_user(user_id)
-    context.user_data[BUFFER_DIALOG_ANSWERS] = []
     if user is None:
         user = User(user_id, update.message.from_user.username, None)
         user = await users_service.create_user(user)
@@ -260,17 +320,16 @@ async def start_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int |
     middle_name = user.middle_name if user.middle_name else None
     object = user.object if user.object else ""
     legal_entity = user.legal_entity if user.legal_entity else ""
-    context.user_data[BUFFER_OBJECT] = object
-    context.user_data[BUFFER_LEGAL_ENTITY] = legal_entity
+    context.user_data[USER_OBJECT] = object
+    context.user_data[USER_LEGAL_ENTITY] = legal_entity
 
     # NEED TO BE OPTIMIZED
     if last_name and middle_name and first_name:
-        context.user_data[BUFFER_NAME] = (
+        context.user_data[USER_NAME] = (
             last_name + " " + first_name + " " + middle_name
         )
     else:
-        context.user_data[BUFFER_NAME] = None
-    #
+        context.user_data[USER_NAME] = None
     try:
         context.user_data[FIRST_START]
     except KeyError:
@@ -307,9 +366,9 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    name = context.user_data.get(BUFFER_NAME)
-    legal_entity = context.user_data.get(BUFFER_LEGAL_ENTITY)
-    object = context.user_data.get(BUFFER_OBJECT)
+    name = context.user_data.get(USER_NAME)
+    legal_entity = context.user_data.get(USER_LEGAL_ENTITY)
+    object = context.user_data.get(USER_OBJECT)
     # first_name = (" " + name.split(" ")[1]) if name else ""
     # middle_name = name.split(" ")[2] if name else ""
     user_id = get_user_id(update)
@@ -326,7 +385,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                     SELECTING_PROFILE_ACTION,
                 ),
                 ("service", SELECTING_SERVICE_ACTION),
-                ("polling", SELECTING_POLLING_ACTION),
+                ("polling", SELECTING_POLL_ACTION),
                 ("feedback", SELECTING_FEEDBACK_ACTION),
             ]
         ]
@@ -346,84 +405,76 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 ]
             ]
         )
-    await send_message(update, context, text, keyboard, payload=(message,))
+    await send_message(update, context, text, keyboard, payload=(message))
     return SELECTING_ACTION
 
-# TO DO (implement multi_dialog and remove previous system)
+
 async def start_service(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[ACTIVE_INPUT_MODE] = SELECTING_SERVICE_ACTION
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    current_problem = context.user_data.get(BUFFER_DESCRIPTION) or "не указано"
-    current_location = context.user_data.get(BUFFER_LOCATION) or "не указано"
-    current_image = "не прикреплено"
-    if context.user_data.get(BUFFER_IMAGE):
-        current_image = "прикреплено"
+    context.user_data[ACTIVE_DIALOG] = service_dialog
+    context.user_data[ACTIVE_DIALOG_SEQUENCE_ID] = 0
+    context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
     await send_message(
         update,
         context,
         "service_header",
         create_keyboard(
             [
-                [
-                    ("description", SETTING_SERVICE_DESCRIPTION),
-                    ("location", SETTING_SERVICE_DESCRIPTION_LOCATION),
-                    ("image", SETTING_SERVICE_DESCRIPTION_IMAGE),
-                ],
-                [("back", SELECTING_ACTION), ("send", SENDING_SERVICE)],
+                [("edit", SETTING_DIALOG_ITEM)],
+                [("back", SELECTING_ACTION)],
             ]
         ),
-        payload=[current_problem, current_location, current_image],
+        payload=["-", "-", "-"],
     )
-    return SELECTING_SERVICE_ACTION
+    return SETTING_DIALOG_ITEM
 
-# TO DO (implement multi_dialog and remove previous system)
+
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[ACTIVE_INPUT_MODE] = SELECTING_PROFILE_ACTION
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    buffer_name = context.user_data.get(BUFFER_NAME)
-    buffer_object = context.user_data.get(BUFFER_OBJECT)
-    buffer_legal_entity = context.user_data.get(BUFFER_LEGAL_ENTITY)
+    name = context.user_data.get(USER_NAME)
+    object = context.user_data.get(USER_OBJECT)
+    legal_entity = context.user_data.get(USER_LEGAL_ENTITY)
     user_id = get_user_id(update)
     user = await users_service.get_user(user_id)
     if user:
-        if buffer_name:
-            last_name = buffer_name.split(" ")[0]
+        if name:
+            last_name = name.split(" ")[0]
             first_name = (
-                buffer_name.split(" ")[1] if len(buffer_name.split(" ")) > 1 else ""
+                name.split(" ")[1] if len(name.split(" ")) > 1 else ""
             )
             middle_name = (
-                buffer_name.split(" ")[2] if len(buffer_name.split(" ")) > 2 else ""
+                name.split(" ")[2] if len(name.split(" ")) > 2 else ""
             )
             user.first_name = first_name
             user.last_name = last_name
             user.middle_name = middle_name
             await users_service.update_user(user)
-        if buffer_object:
-            object = buffer_object
+        if object:
             user.object = object
             await users_service.update_user(user)
-        if buffer_legal_entity:
-            legal_entity = buffer_legal_entity
+        if legal_entity:
             user.legal_entity = legal_entity
             await users_service.update_user(user)
-    await send_message(
-        update,
-        context,
-        "profile_header",
-        create_keyboard(
-            [
+        context.user_data[ACTIVE_DIALOG] = profile_dialog
+        context.user_data[ACTIVE_DIALOG_SEQUENCE_ID] = 0
+        context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
+        await send_message(
+            update,
+            context,
+            "profile_header",
+            create_keyboard(
                 [
-                    ("name", SETTING_PROFILE_NAME),
-                    ("legal_entity", SETTING_PROFILE_LEGAL_ENTITY),
-                    ("object", SETTING_PROFILE_OBJECT),
-                ],
-                [("back", SELECTING_ACTION)],
-            ]
-        ),
-        payload=[buffer_name or "-", buffer_legal_entity or "-", buffer_object or "-"],
-    )
+                    [("edit", SETTING_DIALOG_ITEM)],
+                    [("back", SELECTING_ACTION)],
+                ]
+            ),
+        )
     return SELECTING_PROFILE_ACTION
 
 
@@ -432,7 +483,7 @@ async def start_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
     set_buffer_message(update, context)
-    buffer = context.user_data.get(BUFFER_FEEDBACK) or "отсутствует"
+    buffer = context.user_data.get(FEEDBACK_BUFFER) or "отсутствует"
     await send_message(
         update,
         context,
@@ -452,53 +503,34 @@ async def start_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def start_poll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[ACTIVE_INPUT_MODE] = SELECTING_POLL_ACTION
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_MULTI_DIALOG] = poll
-    context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_ID] = 0
-    context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
+        return SELECTING_ACTION
+    context.user_data[ACTIVE_DIALOG] = poll_dialog
+    context.user_data[ACTIVE_DIALOG_SEQUENCE_ID] = 0
+    context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
     text = "poll_header"
     await send_message(
         update,
         context,
         text,
         create_keyboard(
-            [[("start", SETTING_POLL_QUESTION), ("cancel", SELECTING_ACTION)]]
+            [[("start", SETTING_DIALOG_ITEM), ("cancel", SELECTING_ACTION)]]
         ),
     )
-    return SETTING_POLL_QUESTION
+    return SETTING_DIALOG_ITEM
 
 
-async def set_multi_dialog_item(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, save_mode: int = 0
-) -> int:
+async def set_dialog_item(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     active_input_mode: int = context.user_data.get(ACTIVE_INPUT_MODE)
-    # active_multi_dialog = context.user_data.get(ACTIVE_MULTI_DIALOG)
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
     keyboard = create_keyboard([[("back", SELECTING_ACTION)]])
-    dialog = context.user_data.get(ACTIVE_MULTI_DIALOG)
-    if dialog is None:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
+    dialog = context.user_data.get(ACTIVE_DIALOG)
     sequences, questions, options = dialog
-    active_sequence_id = context.user_data.get(ACTIVE_MULTI_DIALOG_SEQUENCE_ID)
-    active_sequence_question_index = context.user_data.get(
-        ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX
-    )
-    if active_sequence_id is None or active_sequence_question_index is None:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
+    active_sequence_id = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_ID)
+    active_sequence_question_index = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX)
     active_sequence = sequences.get(active_sequence_id)
-    if not active_sequence or not active_sequence.questions_ids:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
     active_questions = [questions[i] for i in active_sequence.questions_ids]
-    if active_sequence_question_index >= len(active_questions):
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
     active_question = active_questions[active_sequence_question_index]
     args = None
     if update.callback_query:
@@ -508,18 +540,21 @@ async def set_multi_dialog_item(
         except ValueError:
             args = None
     text_input = context.user_data.pop(BUFFER_DIALOG_ANSWER, None)
+    image_upload = context.user_data.pop(BUFFER_IMAGE, None)
+    print(text_input)
     answer: str | None = None
     if text_input:
         answer = text_input
         context.user_data[BUFFER_DIALOG_ANSWER] = None
+    elif image_upload:
+        answer = image_upload
+        context.user_data[BUFFER_IMAGE] = None
     elif args is not None:
         answer = options.get(args).text
-    print(f"Text input: {text_input}")
-    print(f"Args: {args}")
-    print(f"Answer: {answer}")
-    print(f"Callback: {_multi_dialogs_callbacks.get(active_input_mode)}")
-    if answer and _multi_dialogs_callbacks.get(active_input_mode):
-        await _multi_dialogs_callbacks.get(active_input_mode)(
+    if answer and _dialog_callbacks.get(active_input_mode):
+        await _dialog_callbacks.get(active_input_mode)(
+            update,
+            context,
             active_sequence.dialog_id,
             active_sequence.id,
             active_question.id,
@@ -527,25 +562,26 @@ async def set_multi_dialog_item(
             answer,
             0,
         )
-    if args is not None or text_input:
+    if args is not None or text_input or image_upload:
         index = active_questions.index(active_question)
         selected_option = options.get(args)
         if selected_option and selected_option.sequence_id is not None:
-            context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_ID] = (
+            context.user_data[ACTIVE_DIALOG_SEQUENCE_ID] = (
                 selected_option.sequence_id
             )
-            context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
+            context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
         elif index + 1 < len(active_questions):
-            context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX] = index + 1
+            context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = index + 1
         elif active_sequence.next_sequence_id is not None:
-            context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_ID] = (
+            context.user_data[ACTIVE_DIALOG_SEQUENCE_ID] = (
                 active_sequence.next_sequence_id
             )
-            context.user_data[ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
+            context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = 0
         else:
-            await send_message(update, context, "multi_dialog_completed")
-            if _multi_dialogs_callbacks.get(active_input_mode):
-                await _multi_dialogs_callbacks.get(active_input_mode)(
+            if _dialog_callbacks.get(active_input_mode):
+                await _dialog_callbacks.get(active_input_mode)(
+                    update,
+                    context,
                     active_sequence.dialog_id,
                     active_sequence.id,
                     active_question.id,
@@ -554,78 +590,52 @@ async def set_multi_dialog_item(
                     1,
                 )
             await start_menu(update, context)
-            return SELECTING_POLLING_ACTION
-        active_sequence_id = context.user_data.get(ACTIVE_MULTI_DIALOG_SEQUENCE_ID)
+            return SELECTING_POLL_ACTION
+        active_sequence_id = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_ID)
         active_sequence_question_index = context.user_data.get(
-            ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX
+            ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX
         )
         active_sequence = sequences.get(active_sequence_id)
-        if not active_sequence:
-            await send_message(update, context, "multi_dialog_data_error")
-            return SELECTING_ACTION
         active_questions = [questions[i] for i in active_sequence.questions_ids]
         if active_sequence_question_index < len(active_questions):
             active_question = active_questions[active_sequence_question_index]
         else:
             active_question = None
+    button = ("send", TYPING_DIALOG_ANSWER)
+    if active_question.type == 0:
+        await set_dialog_answer_select(update, context)
+        return SETTING_DIALOG_ITEM
+    elif active_question.type == 1:
+        button = ("send", TYPING_DIALOG_ANSWER)
+    elif active_question.type == 2:
+        button = ("send", UPLOADING_DIALOG_ANSWER)
     keyboard = create_keyboard(
-        [[("send", SENDING_POLL_ANSWER), ("cancel", SELECTING_ACTION)]]
+        [[button, ("cancel", SETTING_DIALOG_ITEM)]]
     )
     question_text = active_question.text if active_question else "No question data"
     await send_message(update, context, question_text, keyboard)
+    return SETTING_DIALOG_ITEM
 
-    return SETTING_POLL_QUESTION
 
-
-async def set_multi_dialog_answer(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_POLL_QUESTION
-    dialog = context.user_data.get(ACTIVE_MULTI_DIALOG)
-
-    if dialog is None:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
-
+async def set_dialog_answer_typing( update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    dialog = context.user_data.get(ACTIVE_DIALOG)
     sequences, questions, options = dialog
-    active_sequence_id = context.user_data.get(ACTIVE_MULTI_DIALOG_SEQUENCE_ID)
+    active_sequence_id = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_ID)
     active_sequence_question_index = context.user_data.get(
-        ACTIVE_MULTI_DIALOG_SEQUENCE_QUESTION_INDEX
+        ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX
     )
-
-    if active_sequence_id is None or active_sequence_question_index is None:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
-
     active_sequence = sequences.get(active_sequence_id)
-    if not active_sequence or not active_sequence.questions_ids:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
-
-    if active_sequence_question_index >= len(active_sequence.questions_ids):
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
-
     active_question_index = active_sequence.questions_ids[
         active_sequence_question_index
     ]
     active_question = questions.get(active_question_index)
-
-    if active_question is None:
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_ACTION
-
     active_options = [
         options[i] for i in (active_question.options_ids or []) if i in options
     ]
-
     options_buf = []
     for option in active_options:
         options_buf.append(
-            (option.text, str(SETTING_POLL_QUESTION) + ":" + str(option.id))
+            (option.text, str(SETTING_DIALOG_ITEM) + ":" + str(option.id))
         )
     options_buf.append(("cancel", SELECTING_ACTION))
     keyboard = create_keyboard([options_buf])
@@ -634,88 +644,85 @@ async def set_multi_dialog_answer(
     )
     if update.callback_query:
         set_buffer_message(update, context)
-
     return TYPING
 
 
-async def set_profile_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_PROFILE_NAME
-    keyboard = create_keyboard([[("back", SELECTING_ACTION)], [("clear", CLEARING)]])
+async def set_dialog_answer_select( update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    dialog = context.user_data.get(ACTIVE_DIALOG)
+    sequences, questions, options = dialog
+    active_sequence_id = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_ID)
+    active_sequence_question_index = context.user_data.get(
+        ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX
+    )
+    active_sequence = sequences.get(active_sequence_id)
+    active_question_index = active_sequence.questions_ids[
+        active_sequence_question_index
+    ]
+    active_question = questions.get(active_question_index)
+    active_options = [
+        options[i] for i in (active_question.options_ids or []) if i in options
+    ]
+    options_buf = []
+    for option in active_options:
+        options_buf.append(
+            (option.text, str(SETTING_DIALOG_ITEM) + ":" + str(option.id))
+        )
+    options_buf.append(("cancel", SELECTING_ACTION))
+    keyboard = create_keyboard([options_buf])
     await send_message(
-        update,
-        context,
-        "profile_name_text_handler_prompt",
-        keyboard,
+        update, context, "multi_dialog_question_text_handler_prompt", keyboard
     )
-    set_buffer_message(update, context)
-    return TYPING
+    if update.callback_query:
+        set_buffer_message(update, context)
+    return SELECTING
 
 
-async def set_profile_legal_entity(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "multi_dialog_data_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_PROFILE_LEGAL_ENTITY
-    keyboard = create_keyboard(
-        [
-            [
-                ("back", SELECTING_ACTION),
-                ("clear", CLEARING),
-            ]
-        ]
+async def set_dialog_answer_upload( update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    dialog = context.user_data.get(ACTIVE_DIALOG)
+    sequences, questions, options = dialog
+    active_sequence_id = context.user_data.get(ACTIVE_DIALOG_SEQUENCE_ID)
+    active_sequence_question_index = context.user_data.get(
+        ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX
     )
+    active_sequence = sequences.get(active_sequence_id)
+    active_question_index = active_sequence.questions_ids[
+        active_sequence_question_index
+    ]
+    active_question = questions.get(active_question_index)
+    active_options = [
+        options[i] for i in (active_question.options_ids or []) if i in options
+    ]
+    options_buf = []
+    for option in active_options:
+        options_buf.append(
+            (option.text, str(SETTING_DIALOG_ITEM) + ":" + str(option.id))
+        )
+    options_buf.append(("cancel", SELECTING_ACTION))
+    keyboard = create_keyboard([options_buf])
     await send_message(
-        update, context, "profile_legal_entity_text_handler_prompt", keyboard
+        update, context, "multi_dialog_question_text_handler_prompt", keyboard
     )
-    set_buffer_message(update, context)
-    return TYPING
+    if update.callback_query:
+        set_buffer_message(update, context)
+    return UPLOADING
 
 
-async def set_profile_object(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_PROFILE_OBJECT
-    args = update.callback_query.data.split(":")
-    args = args[1] if len(args) > 1 else None
-    if args:
-        if args == "1":
-            context.user_data[BUFFER_OBJECT] = "БЦ 'Основателей'"
-        elif args == "2":
-            context.user_data[BUFFER_OBJECT] = "МФК 'Нордсити'"
-        elif args == "3":
-            context.user_data[BUFFER_OBJECT] = "Стелла"
-        await start_profile(update, context)
-        return SELECTING_PROFILE_ACTION
-    keyboard = create_keyboard(
-        [
-            [
-                ("БЦ 'Основателей'", str(SETTING_PROFILE_OBJECT) + ":1"),
-            ],
-            [
-                ("МФК 'Нордсити'", str(SETTING_PROFILE_OBJECT) + ":2"),
-            ],
-            [
-                ("Стелла", str(SETTING_PROFILE_OBJECT) + ":3"),
-            ],
-            [("Отмена", CANCELING)],
-        ]
-    )
-    await send_message(update, context, "profile_object_text_handler_prompt", keyboard)
-    set_buffer_message(update, context)
-    return SELECTING_PROFILE_ACTION
+async def back_multi_dialog_item(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    question_index = context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX]
+    question_index -= 1
+    if question_index < 0:
+        question_index = 0
+        return SETTING_DIALOG_ITEM
+    context.user_data[ACTIVE_DIALOG_SEQUENCE_QUESTION_INDEX] = question_index
+    await set_dialog_item(update, context)
+    return SETTING_DIALOG_ITEM
 
 
 async def set_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data[ACTIVE_INPUT_MODE] = SELECTING_FEEDBACK_ACTION
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_FEEDBACK
     keyboard = create_keyboard([[("cancel", CANCELING)]])
     await send_message(update, context, "feedback_text_handler_prompt", keyboard)
     set_buffer_message(update, context)
@@ -726,12 +733,12 @@ async def send_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    buffer = context.user_data.get(BUFFER_FEEDBACK) or None
+    buffer = context.user_data.get(FEEDBACK_BUFFER) or None
     text = None
     if (
-        context.user_data.get(BUFFER_NAME) is None
-        or context.user_data.get(BUFFER_LEGAL_ENTITY) is None
-        or context.user_data.get(BUFFER_OBJECT) is None
+        context.user_data.get(USER_NAME) is None
+        or context.user_data.get(USER_LEGAL_ENTITY) is None
+        or context.user_data.get(USER_OBJECT) is None
     ):
         text = "user_profile_validation_error"
     elif buffer:
@@ -744,7 +751,7 @@ async def send_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             )
         )
         text = "feedback_completed"
-        context.user_data[BUFFER_FEEDBACK] = None
+        context.user_data[FEEDBACK_BUFFER] = None
     else:
         text = "feedback_data_error"
     keyboard = create_keyboard([[("cancel", SELECTING_FEEDBACK_ACTION)]])
@@ -752,78 +759,13 @@ async def send_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return SELECTING_FEEDBACK_ACTION
 
 
-async def set_service_description(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
+async def send_service_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not validate_user_data(context):
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_SERVICE_DESCRIPTION
-    keyboard = create_keyboard(
-        [
-            [
-                ("back", SELECTING_ACTION),
-                ("clear", CLEARING),
-            ]
-        ]
-    )
-
-    await send_message(
-        update, context, "service_description_text_handler_prompt", keyboard
-    )
-    set_buffer_message(update, context)
-    return TYPING
-
-
-async def set_service_location(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_SERVICE_DESCRIPTION_LOCATION
-    keyboard = create_keyboard(
-        [
-            [
-                ("back", SELECTING_ACTION),
-                ("clear", CLEARING),
-            ]
-        ]
-    )
-    await send_message(
-        update, context, "service_location_text_handler_prompt", keyboard
-    )
-    set_buffer_message(update, context)
-    return TYPING
-
-
-async def set_service_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    context.user_data[ACTIVE_INPUT_MODE] = SETTING_SERVICE_DESCRIPTION_IMAGE
-    keyboard = create_keyboard(
-        [
-            [
-                ("back", SELECTING_ACTION),
-                ("clear", CLEARING),
-            ]
-        ]
-    )
-    await send_message(update, context, "service_image_text_handler_prompt", keyboard)
-    set_buffer_message(update, context)
-    return UPLOADING
-
-# NEED TO BE REMOVED
-async def send_service_ticket(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    description = context.user_data.get(BUFFER_DESCRIPTION) or None
-    location = context.user_data.get(BUFFER_LOCATION) or None
-    image = context.user_data.get(BUFFER_IMAGE) or None
+    description = context.user_data.get(SERVICE_DESCRIPTION) or None
+    location = context.user_data.get(SERVICE_LOCATION) or None
+    image = context.user_data.get(SERVICE_IMAGE) or None
     keyboard = create_keyboard([[("back", SELECTING_SERVICE_ACTION)]])
     if description is None or location is None:
         await send_message(
@@ -834,9 +776,9 @@ async def send_service_ticket(
         )
         return SELECTING_SERVICE_ACTION
     elif (
-        context.user_data.get(BUFFER_NAME) is None
-        or context.user_data.get(BUFFER_LEGAL_ENTITY) is None
-        or context.user_data.get(BUFFER_OBJECT) is None
+        context.user_data.get(USER_NAME) is None
+        or context.user_data.get(USER_LEGAL_ENTITY) is None
+        or context.user_data.get(USER_OBJECT) is None
     ):
         await send_message(
             update,
@@ -861,74 +803,10 @@ async def send_service_ticket(
         "service_ticket_completed",
         keyboard,
     )
-    context.user_data[BUFFER_DESCRIPTION] = None
-    context.user_data[BUFFER_LOCATION] = None
-    context.user_data[BUFFER_IMAGE] = None
+    context.user_data[SERVICE_DESCRIPTION] = None
+    context.user_data[SERVICE_LOCATION] = None
+    context.user_data[SERVICE_IMAGE] = None
     return SELECTING_SERVICE_ACTION
-
-
-async def handle_text_input(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int | str:
-    if not validate_user_data(context):
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    if not validate_message(update):
-        await send_message(update, context, "message_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    user_text = update.message.text.strip()
-    active_input_mode = context.user_data.get(ACTIVE_INPUT_MODE)
-
-    if active_input_mode in _constates_map:
-        context.user_data[_constates_map[active_input_mode]] = user_text
-
-    await delete_buffer_message(update, context)
-
-    if active_input_mode in _service_input_modes:
-        if not validate_service_location(context):
-            await send_message(
-                update,
-                context,
-                "text_length_validation_error",
-            )
-            context.user_data[BUFFER_LOCATION] = None
-        elif not validate_service_description(context):
-            await send_message(
-                update,
-                context,
-                "text_length_validation_error",
-            )
-            context.user_data[BUFFER_DESCRIPTION] = None
-        await start_service(update, context)
-        return SELECTING_SERVICE_ACTION
-
-    elif active_input_mode in _profile_input_modes:
-        if not validate_profile_object(context):
-            await send_message(update, context, "text_length_validation_error")
-            context.user_data[BUFFER_OBJECT] = None
-        elif not validate_profile_name(context):
-            await send_message(
-                update,
-                context,
-                "⚠️ Имя должно быть в формате: Фамилия Имя Отчество\nИли фамилия должна быть не менее 3-х символов, и общее количество не более 50 символов.",
-            )
-            context.user_data[BUFFER_NAME] = None
-        await start_profile(update, context)
-        return SELECTING_PROFILE_ACTION
-
-    elif active_input_mode in _polling_input_modes:
-        if not validate_question_text(context):
-            await send_message(update, context, "text_length_validation_error")
-            context.user_data[BUFFER_DIALOG_ANSWER] = None
-        await set_multi_dialog_item(update, context)
-        return SETTING_POLL_QUESTION
-
-    elif active_input_mode in _feedback_input_modes:
-        await start_feedback(update, context)
-        return SELECTING_FEEDBACK_ACTION
-
-    context.user_data[ACTIVE_INPUT_MODE] = None
-    return SELECTING_ACTION
 
 
 def validate_user_data(context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -943,75 +821,51 @@ def validate_callback_query(update: Update) -> bool:
     return update.callback_query is not None
 
 
-def validate_question_text(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if validate_user_data(context):
-        question_text = context.user_data.get(BUFFER_DIALOG_ANSWER, "")
-        return question_text is None or len(question_text) <= 1000
+async def handle_text_input(
+    update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | str:
+    if not validate_user_data(context):
+        await send_message(update, context, "user_data_validation_error")
+        return SELECTING_SERVICE_ACTION
+    if not validate_message(update):
+        await send_message(update, context, "message_data_validation_error")
+        return SELECTING_SERVICE_ACTION
+    user_text = update.message.text.strip()
+    active_input_mode = context.user_data.get(ACTIVE_INPUT_MODE)
+    print(active_input_mode)
+    if active_input_mode in _text_handler_routes_map:
+        context.user_data[_text_handler_routes_map[active_input_mode]] = user_text
 
-
-def validate_service_description(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if validate_user_data(context):
-        description = context.user_data.get(BUFFER_DESCRIPTION, "")
-        return description is None or len(description) <= 1000
-    return False
-
-
-def validate_service_location(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if validate_user_data(context):
-        location = context.user_data.get(BUFFER_LOCATION, "")
-        return location is None or len(location) <= 1000
-    return False
-
-
-def validate_profile_object(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if validate_user_data(context):
-        profile_object = context.user_data.get(BUFFER_OBJECT, "")
-        return profile_object is None or len(profile_object) <= 1000
-    return False
-
-
-def validate_profile_name(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if validate_user_data(context):
-        buffer_name = context.user_data.get(BUFFER_NAME, "")
-        if not buffer_name:
-            return False
-        parts = buffer_name.split(" ")
-        return (
-            len(parts) == 3
-            and len(parts[0]) >= 3
-            and sum(len(part) for part in parts) <= 50
-        )
-    return False
+    await delete_buffer_message(update, context)
+    if active_input_mode in _feedback_input_modes:
+        await start_feedback(update, context)
+        return SELECTING_FEEDBACK_ACTION
+    else:
+        await set_dialog_item(update, context)
+        return SETTING_DIALOG_ITEM
+    return SELECTING_ACTION
 
 
 async def handle_image_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if context.user_data is None:
-        await send_message(update, context, "user_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    if update.message is None:
-        await send_message(update, context, "message_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-    try:
-        await delete_buffer_message(update, context)
-        photo_file = await update.message.photo[-1].get_file()
-        context.user_data[BUFFER_IMAGE] = photo_file.file_id
-        logger.info(f"Image received and stored with file_id: {photo_file.file_id}")
-    except (IndexError, AttributeError) as e:
-        logger.error(f"Failed to process image input: {e}")
-        await send_message(update, context, "message_data_validation_error")
-        return SELECTING_SERVICE_ACTION
-
-    await start_service(update, context)
+    await delete_buffer_message(update, context)
+    photo_file = await update.message.photo[-1].get_file()
+    logger.info(f"Image received and stored with file_id: {photo_file.file_id}")
+    active_input_mode = context.user_data.get(ACTIVE_INPUT_MODE)
+    if active_input_mode in _image_handler_routes_map:
+        context.user_data[_image_handler_routes_map[active_input_mode]] = photo_file.file_id
+    await delete_buffer_message(update, context)
+    if active_input_mode in _feedback_input_modes:
+        await start_feedback(update, context)
+        return SELECTING_FEEDBACK_ACTION
+    else:
+        await set_dialog_item(update, context)
+        return SETTING_DIALOG_ITEM
     return SELECTING_SERVICE_ACTION
 
 
-async def cancel_text_input(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int | None:
+async def cancel_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
     if context.user_data is None:
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_ACTION
-
     await send_message(update, context, "Canceled")
     active_input_mode = context.user_data.get(ACTIVE_INPUT_MODE)
     if active_input_mode:
@@ -1023,21 +877,19 @@ async def cancel_text_input(
             return SELECTING_PROFILE_ACTION
         if active_input_mode in _polling_input_modes:
             await start_poll(update, context)
-            return SELECTING_POLLING_ACTION
+            return SELECTING_POLL_ACTION
         if active_input_mode in _feedback_input_modes:
             await start_feedback(update, context)
             return SELECTING_FEEDBACK_ACTION
 
 
-async def clear_text_buffer(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int | None:
+async def clear_text_buffer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
     if context.user_data is None:
         await send_message(update, context, "user_data_validation_error")
         return SELECTING_ACTION
     active_input_mode = context.user_data.get(ACTIVE_INPUT_MODE)
     if active_input_mode:
-        context.user_data[_constates_map[active_input_mode]] = None
+        context.user_data[_text_handler_routes_map[active_input_mode]] = None
     await send_message(update, context, "Canceled")
     if active_input_mode in _service_input_modes:
         await start_service(update, context)
@@ -1047,7 +899,7 @@ async def clear_text_buffer(
         return SELECTING_PROFILE_ACTION
     if active_input_mode in _polling_input_modes:
         await start_poll(update, context)
-        return SELECTING_POLLING_ACTION
+        return SELECTING_POLL_ACTION
 
 
 def main() -> None:
@@ -1058,43 +910,64 @@ def main() -> None:
 
     args = parser.parse_args()
     application = Application.builder().token(args.token).build()
+    multi_dialog_states = {
+        TYPING: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
+        ],
+        UPLOADING: [
+            MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_image_input)
+        ],
+        SELECTING_DIALOG_ANSWER: [
+            CallbackQueryHandler(
+                set_dialog_answer_select,
+                pattern="^" + str(SELECTING_DIALOG_ANSWER) + "$",
+            )
+        ],
+        TYPING_DIALOG_ANSWER : [
+            CallbackQueryHandler(
+                set_dialog_answer_typing,
+                pattern="^" + str(TYPING_DIALOG_ANSWER) + "$",
+            )
+        ],
+        UPLOADING_DIALOG_ANSWER : [
+            CallbackQueryHandler(
+                set_dialog_answer_upload,
+                pattern="^" + str(UPLOADING_DIALOG_ANSWER) + "$",
+            )
+        ],
+        SETTING_DIALOG_ITEM: [
+            CallbackQueryHandler(
+                set_dialog_item,
+                pattern="^" + str(SETTING_DIALOG_ITEM) + r":?(\d+)?$",
+            )
+        ],
+    }
+    multi_dialog_fallbacks = [
+        CallbackQueryHandler(
+            set_dialog_answer_select, pattern="^" + str(SELECTING_DIALOG_ANSWER) + "$"
+        ),
+        CallbackQueryHandler(
+            set_dialog_answer_typing, pattern="^" + str(TYPING_DIALOG_ANSWER) + "$"
+        ),
+        CallbackQueryHandler(
+            set_dialog_answer_upload, pattern="^" + str(UPLOADING_DIALOG_ANSWER) + "$"
+        ),
+        CallbackQueryHandler(cancel_text_input, pattern="^" + str(CANCELING) + "$"),
+        CallbackQueryHandler(start_menu, pattern="^" + str(SELECTING_ACTION) + "$"),
+        CallbackQueryHandler(back_multi_dialog_item, pattern = "^" + str(CANCELING_DIALOG_ITEM)+ "$"),
+        CallbackQueryHandler(
+            set_dialog_item,
+            pattern="^" + str(SETTING_DIALOG_ITEM) + r":?(\d+)?$",
+        ),
+    ]
     service_conv_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
                 start_service, pattern="^" + str(SELECTING_SERVICE_ACTION) + "$"
             )
         ],
-        states={
-            UPLOADING: [MessageHandler(filters.PHOTO, handle_image_input)],
-            TYPING: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
-            ],
-            SELECTING_SERVICE_ACTION: [
-                CallbackQueryHandler(
-                    set_service_description,
-                    pattern="^" + str(SETTING_SERVICE_DESCRIPTION) + "$",
-                ),
-                CallbackQueryHandler(
-                    set_service_location,
-                    pattern="^" + str(SETTING_SERVICE_DESCRIPTION_LOCATION) + "$",
-                ),
-                CallbackQueryHandler(
-                    set_service_image,
-                    pattern="^" + str(SETTING_SERVICE_DESCRIPTION_IMAGE) + "$",
-                ),
-                CallbackQueryHandler(
-                    send_service_ticket, pattern="^" + str(SENDING_SERVICE) + "$"
-                ),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(clear_text_buffer, pattern="^" + str(CLEARING) + "$"),
-            CallbackQueryHandler(cancel_text_input, pattern="^" + str(CANCELING) + "$"),
-            CallbackQueryHandler(start_menu, pattern="^" + str(SELECTING_ACTION) + "$"),
-            CallbackQueryHandler(
-                start_service, pattern="^" + str(SELECTING_SERVICE_ACTION) + "$"
-            ),
-        ],
+        states=multi_dialog_states,
+        fallbacks=multi_dialog_fallbacks,
         map_to_parent={SELECTING_ACTION: SELECTING_ACTION},
     )
     profile_conv_handler = ConversationHandler(
@@ -1103,68 +976,18 @@ def main() -> None:
                 start_profile, pattern="^" + str(SELECTING_PROFILE_ACTION) + "$"
             )
         ],
-        states={
-            TYPING: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
-            ],
-            SELECTING_PROFILE_ACTION: [
-                CallbackQueryHandler(
-                    set_profile_name, pattern="^" + str(SETTING_PROFILE_NAME) + "$"
-                ),
-                CallbackQueryHandler(
-                    set_profile_legal_entity,
-                    pattern="^" + str(SETTING_PROFILE_LEGAL_ENTITY) + "$",
-                ),
-                CallbackQueryHandler(
-                    set_profile_object,
-                    pattern="^" + str(SETTING_PROFILE_OBJECT) + r":?(\d+)?$",
-                ),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(clear_text_buffer, pattern="^" + str(CLEARING) + "$"),
-            CallbackQueryHandler(cancel_text_input, pattern="^" + str(CANCELING) + "$"),
-            CallbackQueryHandler(start_menu, pattern="^" + str(SELECTING_ACTION) + "$"),
-            CallbackQueryHandler(
-                start_service, pattern="^" + str(SELECTING_PROFILE_ACTION) + "$"
-            ),
-        ],
+        states=multi_dialog_states,
+        fallbacks=multi_dialog_fallbacks,
         map_to_parent={SELECTING_ACTION: SELECTING_ACTION},
     )
     polling_conv_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(
-                start_poll, pattern="^" + str(SELECTING_POLLING_ACTION) + "$"
+                start_poll, pattern="^" + str(SELECTING_POLL_ACTION) + "$"
             )
         ],
-        states={
-            TYPING: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
-            ],
-            SENDING_POLL_ANSWER: [
-                CallbackQueryHandler(
-                    set_multi_dialog_answer,
-                    pattern="^" + str(SENDING_POLL_ANSWER) + "$",
-                )
-            ],
-            SETTING_POLL_QUESTION: [
-                CallbackQueryHandler(
-                    set_multi_dialog_item,
-                    pattern="^" + str(SETTING_POLL_QUESTION) + r":?(\d+)?$",
-                )
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(
-                set_multi_dialog_answer, pattern="^" + str(SENDING_POLL_ANSWER) + "$"
-            ),
-            CallbackQueryHandler(cancel_text_input, pattern="^" + str(CANCELING) + "$"),
-            CallbackQueryHandler(start_menu, pattern="^" + str(SELECTING_ACTION) + "$"),
-            CallbackQueryHandler(
-                set_multi_dialog_item,
-                pattern="^" + str(SETTING_POLL_QUESTION) + r":?(\d+)?$",
-            ),
-        ],
+        states=multi_dialog_states,
+        fallbacks=multi_dialog_fallbacks,
         map_to_parent={SELECTING_ACTION: SELECTING_ACTION},
     )
     feedback_conv_handler = ConversationHandler(
