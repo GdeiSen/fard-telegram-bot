@@ -1,6 +1,7 @@
 import sqlite3
 
 from models import Feedback, Dialog, Question, ServiceTicket, User, Answer
+from datetime import datetime
 
 class Database:
     def __init__(self, db_file: str):
@@ -276,13 +277,34 @@ class Database:
                 user.id,
                 answer.dialog_id,
                 answer.sequence_id,
-                answer.question_id,
+                answer.item_id,
                 answer.answer,
                 answer.created_at,
             )
         )
         self.conn.commit()
         return index + 1
+
+
+    async def update_answer(self, user: User, answer: Answer):
+        self.cursor.execute(
+            """
+            UPDATE answers
+            SET user_id = ?, dialog_id = ?, sequence_id = ?, question_id = ?, answer = ?, created_at = ?
+            WHERE id = ?
+            """,
+            (
+                user.id,
+                answer.dialog_id,
+                answer.sequence_id,
+                answer.item_id,
+                answer.answer,
+                answer.created_at,
+                answer.id
+            )
+        )
+        self.conn.commit()
+        return answer.id
 
 
     async def remove_answer(self, user: User, answer: Answer):
@@ -293,6 +315,51 @@ class Database:
             (user.id, answer.id)
         )
         self.conn.commit()
+
+
+    async def get_answers(self, user: User) -> list:
+        self.cursor.execute(
+            """
+            SELECT * FROM answers WHERE user_id = ?
+            """,
+            (user.id,)
+        )
+        db_answers = self.cursor.fetchall()
+        answers = []
+        for db_answer in db_answers:
+            answers.append(Answer(
+                id=db_answer[0],
+                user_id=db_answer[1],
+                dialog_id=db_answer[2],
+                sequence_id=db_answer[3],
+                item_id=db_answer[4],
+                answer=db_answer[5],
+                date=db_answer[6]
+            ))
+        return answers
+
+
+    async def get_answer(self, user_id: int, dialog_id: int, sequence_id: int, question_id: int):
+        self.cursor.execute(
+            """
+            SELECT *
+            FROM answers
+            WHERE user_id = ? AND dialog_id = ? AND sequence_id = ? AND question_id = ?
+            """,
+            (user_id, dialog_id, sequence_id, question_id)
+        )
+        db_answer = self.cursor.fetchone()
+        if not db_answer:
+            return None
+        return Answer(
+            id = db_answer[0],
+            user_id = db_answer[1],
+            dialog_id = db_answer[2],
+            sequence_id = db_answer[3],
+            item_id = db_answer[4],
+            answer = db_answer[5],
+            date = db_answer[6]
+        )
 
 
 # FEEDBACKS

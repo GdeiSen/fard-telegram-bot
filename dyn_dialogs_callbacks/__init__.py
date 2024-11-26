@@ -1,0 +1,3 @@
+from dyn_dialogs_callbacks.poll_callback import poll_callback
+from dyn_dialogs_callbacks.service_callback import service_callback
+from dyn_dialogs_callbacks.profile_callback import profile_callback
