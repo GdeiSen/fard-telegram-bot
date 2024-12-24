@@ -1,6 +1,9 @@
 import json
 
-from models import Sequence, Question, Option, Dialog
+from entities.dialog_sequence import Sequence
+from entities.dialog_question import Question
+from entities.dialog_option import Option
+from entities.dialog import Dialog
 
 class DialogConverter:
     def convert(self, json_file: str) -> Dialog:
@@ -35,6 +38,7 @@ class DialogConverter:
             options[option.id] = option
         dialog = Dialog(
             id=data['id'],
+            trace = data['trace'],
             sequences=sequences,
             items=items,
             options=options

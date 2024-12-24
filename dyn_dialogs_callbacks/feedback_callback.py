@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 from datetime import datetime
 from entities.dialog_answer import Answer
+from entities.feedback import Feedback
 from constants import Dialogs
 
 if TYPE_CHECKING:
@@ -9,8 +10,7 @@ if TYPE_CHECKING:
     from bot import Bot
     from entities.dialog import Dialog
 
-
-async def poll_callback(
+async def feedback_callback(
     bot: "Bot",
     update: "Update",
     context: "ContextTypes.DEFAULT_TYPE",
@@ -25,16 +25,16 @@ async def poll_callback(
     if user_id:
         user = await bot.user_service.get_user(user_id)
         if user:
-            answer_obj = Answer(
-                id = 0,
-                user_id = user_id,
-                dialog_id = dialog.id,
-                sequence_id = sequence_id,
-                item_id = item_id,
-                answer = answer
+            feedback = Feedback(
+                id=0,
+                user_id=user_id,
+                answer=answer,
+                dialog_id=dialog.id,
+                sequence_id=sequence_id,
+                item_id=item_id
             )
-            await bot.poll_service.update_answer(user, answer_obj)
+            await bot.feedback_service.create_feedback(feedback)
     if state == 1:
-        await bot.send_message(update, context, "poll_completed", dynamic=False)
+        await bot.send_message(update, context, "feedback_completed", dynamic=False)
         return await bot.router.execute(Dialogs.MENU, update, context)
     return True

@@ -1,5 +1,5 @@
-from dialogs.dyn_dialog import (start_dyn_dialog, start_dyn_dialog_typing_subdialog, start_dyn_dialog_select_subdialog, start_dyn_dialog_upload_subdialog)
-from dialogs.feedback_dialog import (start_feedback_dialog, start_set_feedback_subdialog, start_send_feedback_subdialog)
+from dialogs.dyn_dialog import (start_dyn_dialog, start_dyn_dialog_typing_subdialog, start_dyn_dialog_select_subdialog, start_dyn_dialog_upload_subdialog, start_prev_dyn_dialog)
+from dialogs.feedback_dialog import (start_feedback_dialog)
 from dialogs.menu_dialog import (start_menu_dialog)
 from dialogs.profile_dialog import (start_profile_dialog)
 from dialogs.service_dialog import (start_service_dialog)

@@ -1,0 +1,19 @@
+{
+    "id": 3,
+    "trace": false,
+    "sequences": [
+      {
+        "id": 0,
+        "items_ids": [0]
+      }
+    ],
+    "items": [
+      {
+        "id": 0,
+        "text": "Введите ваши рекомендации",
+        "type": 1
+      }
+    ],
+    "options": []
+  }
+  

@@ -7,6 +7,7 @@ from typing import Callable, Coroutine, Any
 from dyn_dialogs_callbacks.profile_callback import profile_callback
 from dyn_dialogs_callbacks.poll_callback import poll_callback
 from dyn_dialogs_callbacks.service_callback import service_callback
+from dyn_dialogs_callbacks.feedback_callback import feedback_callback
 
 from dialogs import (
     start_app_dialog,
@@ -14,9 +15,8 @@ from dialogs import (
     start_dyn_dialog_typing_subdialog,
     start_dyn_dialog_select_subdialog,
     start_dyn_dialog_upload_subdialog,
+    start_prev_dyn_dialog,
     start_feedback_dialog,
-    start_set_feedback_subdialog,
-    start_send_feedback_subdialog,
     start_menu_dialog,
     start_profile_dialog,
     start_service_dialog,
@@ -43,8 +43,8 @@ from telegram.ext import (
 
 
 from locales.localisation_uni import Data as LocalisationData
-from database import Database
-from models import Dialog
+from database_manager import DatabaseManager
+from entities.dialog import Dialog
 from services import FeedbacksService, PollService, ServicesService, UsersService
 from utils import DictExtractor, DialogConverter
 
@@ -131,13 +131,13 @@ class Router:
     async def execute_parent(self, update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "Bot") -> int | str:
         parent = self.get_parent_item(context)
         if parent is not None:
-            self.remove_trace_items(context, 0, 1)
+            # self.remove_trace_items(context, 0, 1)
             return await self.execute(parent, update, context)
         return -1
 
     async def execute_previous(self, update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "Bot") -> int | str:
         previous = self.get_previous_trace_item(context)
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         if previous is not None:
             current_trace = current_trace[:-1]
             if len(current_trace) > 1:
@@ -145,63 +145,66 @@ class Router:
             return await self.execute(previous, update, context)
         return -1
 
-    def _get_current_trace(self, context : ContextTypes.DEFAULT_TYPE) -> list[int | str]:
+    def get_current_trace(self, context : ContextTypes.DEFAULT_TYPE) -> list[int | str]:
         current_trace = self.bot.local_storage.get(context, Variables.ACTIVE_DIALOG_TRACE)
         if current_trace is None:
             return []
         return current_trace
 
     def _set_current_trace(self, context : ContextTypes.DEFAULT_TYPE, current_trace : list[int | str]):
-        self.bot.local_storage.set(context, Variables.ACTIVE_DIALOG_TRACE, current_trace)
+        self.bot.local_storage.set(context, Variables.ACTIVE_DIALOG_TRACE, current_trace.copy())
 
     def add_trace_item(self, context : ContextTypes.DEFAULT_TYPE, item : int | str):
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         if current_trace is None:
             current_trace = []
         current_trace.append(item)
         self._set_current_trace(context, current_trace)
 
     def set_entry_point_item(self, context : ContextTypes.DEFAULT_TYPE, item : int):
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         current_trace = []
         current_trace.insert(0, item)
         self._set_current_trace(context, current_trace)
 
     def set_parent_item(self, context : ContextTypes.DEFAULT_TYPE, item : int):
-        current_trace = self._get_current_trace(context)
-        if current_trace is None:
-            current_trace = []
-        # else:
-        #     self.remove_trace_items(context, 1, len(current_trace))
-        current_trace.insert(1, item)
+        current_trace = self.get_current_trace(context)
+        if current_trace is None or len(current_trace) == 0:
+            current_trace = [0, item]
+        elif len(current_trace) >= 2:
+            current_trace[1] = item
+        else:
+            current_trace.append(item)
         self._set_current_trace(context, current_trace)
 
     def remove_trace_items(self, context : ContextTypes.DEFAULT_TYPE, start: int, end: int):
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         if current_trace is None:
             return
         current_trace = current_trace[start:end]
         self._set_current_trace(context, current_trace)
 
-    def get_previous_trace_item(self, context : ContextTypes.DEFAULT_TYPE) -> int | str | None:
-        current_trace = self._get_current_trace(context)
-        if current_trace is None:
+    def pop_previous_trace_item(self, context : ContextTypes.DEFAULT_TYPE) -> int | str | None:
+        current_trace = self.get_current_trace(context)
+        prev_trace_item = None
+        if current_trace is None or len(current_trace) == 0:
             return None
-        if len(current_trace) == 0:
-            return None
-        return current_trace[-1]
+        prev_trace_item = current_trace[len(current_trace)-1]
+        print(current_trace)
+        current_trace = current_trace[:-1]
+        print(current_trace)
+        self._set_current_trace(context, current_trace)
+        return prev_trace_item
 
     def get_parent_item(self, context : ContextTypes.DEFAULT_TYPE) -> int | str | None:
-        current_trace = self._get_current_trace(context)
-        if current_trace is None:
+        current_trace = self.get_current_trace(context)
+        if current_trace is None or len(current_trace) <= 1:
             return None
-        if len(current_trace) <= 1:
-            return None
-        first_sub_item = current_trace[1]
-        return first_sub_item
+        parent = current_trace[1]
+        return parent
 
     def get_entry_point_item(self, context : ContextTypes.DEFAULT_TYPE) -> int | str | None:
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         if current_trace is None:
             return None
         if len(current_trace) == 0:
@@ -210,7 +213,7 @@ class Router:
         return first_item
 
     def get_current_trace_item(self, context : ContextTypes.DEFAULT_TYPE) -> int | str | None:
-        current_trace = self._get_current_trace(context)
+        current_trace = self.get_current_trace(context)
         if current_trace is None:
             return None
         if len(current_trace) == 0:
@@ -228,15 +231,15 @@ class ErrorHandler:
 
 class Bot:
 
-    def __init__(self, application: Application, database: Database, utils: Utils, local_storage: Storage, error_handler: ErrorHandler):
-        self.database = database
+    def __init__(self, application: Application, database_manager: DatabaseManager, utils: Utils, local_storage: Storage, error_handler: ErrorHandler):
+        self.database_manager = database_manager
         self.application = application
         self.error_handler = error_handler
         self.local_storage = Storage()
-        self.user_service = UsersService(self.database)
-        self.service_service = ServicesService(self.database)
-        self.poll_service = PollService(self.database)
-        self.feedback_service = FeedbacksService(self.database)
+        self.user_service = UsersService(self.database_manager)
+        self.service_service = ServicesService(self.database_manager)
+        self.poll_service = PollService(self.database_manager)
+        self.feedback_service = FeedbacksService(self.database_manager)
         self.utils = utils
         self.router = Router(self)
         self.local_storage = local_storage
@@ -257,9 +260,18 @@ class Bot:
         return text
 
 
-    async def send_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup: InlineKeyboardMarkup | None = None, payload: list[str] | None = None, parse_mode: ParseMode = ParseMode.HTML, dynamic: bool = True, refresh = False) -> None:
+    async def send_message(
+    self,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    payload: list[str] | None = None,
+    parse_mode: ParseMode = ParseMode.HTML,
+    dynamic: bool = True,
+    refresh = False
+) -> None:
         text = self.get_text(text, payload, 'RU')
-
         if not dynamic or refresh:
             chat_id = None
             if update.message:
@@ -267,7 +279,44 @@ class Bot:
             elif update.callback_query and update.callback_query.message:
                 chat_id = update.callback_query.message.chat.id
 
-            if refresh:
+            if chat_id:
+                try:
+                    if refresh:
+                        buffer_message = self.local_storage.get(context, Variables.BUFFER_MESSAGE)
+                        if buffer_message:
+                            try:
+                                await context.bot.delete_message(
+                                    chat_id=buffer_message.chat_id, message_id=buffer_message.message_id
+                                )
+                            except Exception as e:
+                                await self.error_handler.handle(1000, str(e))
+                            self.local_storage.set(context, Variables.BUFFER_MESSAGE, None)
+
+                    message = await context.bot.send_message(
+                        chat_id,
+                        text,
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.HTML,
+                    )
+
+                    if message and dynamic:
+                        self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
+                except Exception as e:
+                    await self.error_handler.handle(1001, str(e))
+
+        elif update.callback_query:
+            try:
+                message = await update.callback_query.edit_message_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode
+                )
+                self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
+            except Exception as e:
+                await self.error_handler.handle(1002, str(e))
+
+        elif update.message:
+            try:
                 buffer_message = self.local_storage.get(context, Variables.BUFFER_MESSAGE)
                 if buffer_message:
                     try:
@@ -278,41 +327,15 @@ class Bot:
                         await self.error_handler.handle(1000, str(e))
                     self.local_storage.set(context, Variables.BUFFER_MESSAGE, None)
 
-            if chat_id:
                 message = await context.bot.send_message(
-                    chat_id,
-                    text,
+                    chat_id=update.message.chat.id,
+                    text=text,
                     reply_markup=reply_markup,
-                    parse_mode=ParseMode.HTML,
+                    parse_mode=parse_mode,
                 )
-
-                if message and dynamic:
-                    self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
-
-        elif update.callback_query:
-            message = await update.callback_query.edit_message_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode
-            )
-            self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
-        elif update.message:
-            buffer_message = self.local_storage.get(context, Variables.BUFFER_MESSAGE)
-            if buffer_message:
-                try:
-                    await context.bot.delete_message(
-                        chat_id=buffer_message.chat_id, message_id=buffer_message.message_id
-                    )
-                except Exception as e:
-                    await self.error_handler.handle(1000, str(e))
-                self.local_storage.set(context, Variables.BUFFER_MESSAGE, None)
-            message = await context.bot.send_message(
-                chat_id=update.message.chat.id,
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
-            )
-            self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
+                self.local_storage.set(context, Variables.BUFFER_MESSAGE, message)
+            except Exception as e:
+                await self.error_handler.handle(1003, str(e))
 
 
     def create_keyboard(self, rows: list[list[tuple[str, int | str]]]) -> InlineKeyboardMarkup:
@@ -331,19 +354,20 @@ class Bot:
         self.dyn_dialog_handlers_manager.add_handler(Dialogs.SERVICE, service_callback)
         self.dyn_dialog_handlers_manager.add_handler(Dialogs.PROFILE, profile_callback)
         self.dyn_dialog_handlers_manager.add_handler(Dialogs.POLL, poll_callback)
+        self.dyn_dialog_handlers_manager.add_handler(Dialogs.FEEDBACK, feedback_callback)
         self.dyn_dialogs = {
             Dialogs.SERVICE: self.utils.dialog_converter.convert("./assets/service_dialog.json"),
             Dialogs.PROFILE: self.utils.dialog_converter.convert("./assets/profile_dialog.json"),
-            Dialogs.POLL: self.utils.dialog_converter.convert("./assets/poll_dialog.json")
+            Dialogs.POLL: self.utils.dialog_converter.convert("./assets/poll_dialog.json"),
+            Dialogs.FEEDBACK: self.utils.dialog_converter.convert("./assets/feedback_dialog.json")
         }
         self.router.add_dialog(Dialogs.START, start_app_dialog)
         self.router.add_dialog(Dialogs.DYN_DIALOG_ITEM, start_dyn_dialog)
         self.router.add_dialog(Dialogs.DYN_DIALOG_TEXT_INPUT, start_dyn_dialog_typing_subdialog)
         self.router.add_dialog(Dialogs.DYN_DIALOG_OPTION_SELECT, start_dyn_dialog_select_subdialog)
         self.router.add_dialog(Dialogs.DYN_DIALOG_IMAGE_UPLOAD, start_dyn_dialog_upload_subdialog)
+        self.router.add_dialog(Dialogs.DYN_DIALOG_PREV_ITEM, start_prev_dyn_dialog)
         self.router.add_dialog(Dialogs.FEEDBACK, start_feedback_dialog)
-        self.router.add_dialog(Dialogs.FEEDBACK_SEND, start_send_feedback_subdialog)
-        self.router.add_dialog(Dialogs.FEEDBACK_SET, start_set_feedback_subdialog)
         self.router.add_dialog(Dialogs.MENU, start_menu_dialog)
         self.router.add_dialog(Dialogs.PROFILE, start_profile_dialog)
         self.router.add_dialog(Dialogs.SERVICE, start_service_dialog)
@@ -352,13 +376,6 @@ class Bot:
         self.router.add_handler(Actions.TYPING, handle_text_input)
         self.router.add_handler(Actions.CANCELING, cancel_text_input)
         self.router.add_handler(Actions.UPLOADING, handle_image_input)
-
-        self.router.add_back_route(Dialogs.FEEDBACK_SET, Dialogs.FEEDBACK)
-        self.router.add_back_route(Dialogs.FEEDBACK_SEND, Dialogs.FEEDBACK)
-        self.router.add_back_route(Dialogs.PROFILE, Dialogs.PROFILE)
-        self.router.add_back_route(Dialogs.SERVICE, Dialogs.SERVICE)
-        self.router.add_back_route(Dialogs.FEEDBACK, Dialogs.FEEDBACK)
-        self.router.add_back_route(Dialogs.POLL, Dialogs.POLL)
 
         service_conv_handler = ConversationHandler(
             entry_points=[
@@ -400,30 +417,28 @@ class Bot:
             fallbacks=[
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_OPTION_SELECT,update, context),
-                    pattern="^" + str(Dialogs.DYN_DIALOG_OPTION_SELECT) + "$"
-                ),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_OPTION_SELECT) + "$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_TEXT_INPUT,update, context),
-                    pattern="^" + str(Dialogs.DYN_DIALOG_TEXT_INPUT) + "$"
-                ),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_TEXT_INPUT) + "$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_IMAGE_UPLOAD,update, context),
-                    pattern="^" + str(Dialogs.DYN_DIALOG_IMAGE_UPLOAD) + "$"
-                ),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_IMAGE_UPLOAD) + "$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_ITEM,update, context),
                     pattern="^" + str(Actions.CANCELING) + "$"),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_PREV_ITEM, update, context),
+                    pattern="^" + str(Actions.BACK) + "$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.MENU,update, context),
                     pattern="^" + str(Dialogs.MENU) + "$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_ITEM,update, context),
-                    pattern="^" + str(Dialogs.DYN_DIALOG_ITEM) + r":?(\d+)?$",
-                ),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_ITEM) + r":?(\d+)?$"),
                 CallbackQueryHandler(
                     lambda update, context: self.router.execute(Dialogs.SERVICE, update, context),
-                    pattern="^" + str(Dialogs.SERVICE) + r":?(\d+)?$",
-                )
+                    pattern="^" + str(Dialogs.SERVICE) + r":?(\d+)?$")
             ],
             map_to_parent={Dialogs.MENU: Dialogs.MENU},
         )
@@ -567,29 +582,67 @@ class Bot:
         feedback_conv_handler = ConversationHandler(
             entry_points=[
                 CallbackQueryHandler(
-                    lambda update, context: self.router.execute(Dialogs.FEEDBACK ,update, context),
+                    lambda update, context: self.router.execute(Dialogs.FEEDBACK,update, context),
                     pattern="^" + str(Dialogs.FEEDBACK) + "$"
                 )
             ],
             states={
-                Actions.TYPING: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, lambda update, context: self.router.execute(Actions.TYPING, update, context))
+                Actions.TYPING: [MessageHandler(filters.TEXT & ~filters.COMMAND, lambda update, context: self.router.execute(Actions.TYPING,update, context))],
+                Actions.UPLOADING: [
+                    MessageHandler(filters.PHOTO & ~filters.COMMAND, lambda update, context: self.router.execute(Actions.UPLOADING ,update, context))
                 ],
-                Actions.SETTING: [
+                Dialogs.DYN_DIALOG_OPTION_SELECT: [
                     CallbackQueryHandler(
-                        lambda update, context: self.router.execute(Dialogs.FEEDBACK_SET,update, context),
-                        pattern = "^" + str(Dialogs.FEEDBACK_SET) + "$"
-                    ),
-                    CallbackQueryHandler(
-                        lambda update, context: self.router.execute(Dialogs.FEEDBACK_SEND,update, context),
-                        pattern = "^" + str(Dialogs.FEEDBACK_SEND) + "$"
+                        lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_OPTION_SELECT,update, context),
+                        pattern="^" + str(Dialogs.DYN_DIALOG_OPTION_SELECT) + "$",
                     )
-                ]
+                ],
+                Dialogs.DYN_DIALOG_TEXT_INPUT : [
+                    CallbackQueryHandler(
+                        lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_TEXT_INPUT,update, context),
+                        pattern="^" + str(Dialogs.DYN_DIALOG_TEXT_INPUT) + "$",
+                    )
+                ],
+                Dialogs.DYN_DIALOG_IMAGE_UPLOAD : [
+                    CallbackQueryHandler(
+                        lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_IMAGE_UPLOAD,update, context),
+                        pattern="^" + str(Dialogs.DYN_DIALOG_IMAGE_UPLOAD) + "$",
+                    )
+                ],
+                Dialogs.DYN_DIALOG_ITEM: [
+                    CallbackQueryHandler(
+                        lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_ITEM,update, context),
+                        pattern="^" + str(Dialogs.DYN_DIALOG_ITEM) + r":?(\d+)?$",
+                    )
+                ],
             },
             fallbacks=[
-                CallbackQueryHandler(lambda update, context: self.router.execute(Dialogs.MENU,update, context), pattern="^" + str(Actions.CANCELING) + "$"),
-                CallbackQueryHandler(lambda update, context: self.router.execute(Dialogs.MENU,update, context), pattern="^" + str(Dialogs.MENU) + "$"),
-                CallbackQueryHandler(lambda update, context: self.router.execute(Dialogs.FEEDBACK,update, context), pattern="^" + str(Dialogs.FEEDBACK) + "$"),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_OPTION_SELECT,update, context),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_OPTION_SELECT) + "$"
+                ),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_TEXT_INPUT,update, context),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_TEXT_INPUT) + "$"
+                ),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_IMAGE_UPLOAD,update, context),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_IMAGE_UPLOAD) + "$"
+                ),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_ITEM,update, context),
+                    pattern="^" + str(Actions.CANCELING) + "$"),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.MENU,update, context),
+                    pattern="^" + str(Dialogs.MENU) + "$"),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.DYN_DIALOG_ITEM,update, context),
+                    pattern="^" + str(Dialogs.DYN_DIALOG_ITEM) + r":?(\d+)?$",
+                ),
+                CallbackQueryHandler(
+                    lambda update, context: self.router.execute(Dialogs.FEEDBACK, update, context),
+                    pattern="^" + str(Dialogs.FEEDBACK) + r":?(\d+)?$",
+                )
             ],
             map_to_parent={Dialogs.MENU: Dialogs.MENU},
         )
@@ -619,23 +672,23 @@ class Bot:
 
 class Agent:
     def __init__(self):
-        self.database: Database | None = None
+        self.database_manager: DatabaseManager | None = None
         self.local_storage: Storage | None = None
         self.application: Application | None = None
         self.bot: Bot | None = None
         self.error_handler : ErrorHandler = ErrorHandler()
         self.utils = Utils()
 
-    def start(self, token: str):
-        self.database = Database("data.db")
+    def start(self, token: str, db_url: str):
+        self.database_manager = DatabaseManager(db_url)
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.database.create_tables())
+        self.database_manager.create_tables()
         self.local_storage = Storage()
         self.application = Application.builder().token(token).build()
 
         self.bot = Bot(
             self.application,
-            self.database,
+            self.database_manager,
             self.utils,
             self.local_storage,
             self.error_handler
@@ -653,13 +706,25 @@ locales = "./locales/localisation_uni.py"
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the bot with a specified Telegram token."
+        description="Telegram бот с подключением к MySQL"
     )
-    parser.add_argument("token", type=str, help="The Telegram bot token")
+    parser.add_argument(
+        "--token", 
+        type=str, 
+        required=True,
+        help="Токен Telegram бота"
+    )
+    parser.add_argument(
+        "--db-url", 
+        type=str, 
+        required=True,
+        help="URL подключения к базе данных"
+    )
     args = parser.parse_args()
     token = args.token
+    db_url = args.db_url
     agent = Agent()
-    agent.start(token)
+    agent.start(token, db_url)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,4 @@
-from models.feedback import Feedback
-from models.dialog import Dialog
-from models.dialog_option import Option
-from models.dialog_question import Question
-from models.dialog_answer import Answer
-from models.dialog_sequence import Sequence
-from models.service_ticket import ServiceTicket
-from models.user import User
+from models.feedback import FeedbackModel, feedback_to_model, model_to_feedback
+from models.user import UserModel, user_to_model, model_to_user
+from models.service_ticket import ServiceTicketModel, service_ticket_to_model, model_to_service_ticket
+from models.poll_answer import PollAnswerModel, poll_answer_to_model, model_to_poll_answer

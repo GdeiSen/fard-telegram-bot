@@ -23,6 +23,7 @@ lib64/
 parts/
 sdist/
 var/
+.venv/
 
 # Installer logs
 pip-log.txt
@@ -85,3 +86,6 @@ ehthumbs.db
 .venv
 
 # Ignore any other files or directories you want to exclude from version control.
+.trunk/
+.mypy_cache/
+.ropeproject/

@@ -10,3 +10,5 @@ class User:
         self.data_processing_consent: bool = False
         self.object: str | None = None
         self.legal_entity: str |None = None
+        self.phone_number: str | None = None
+        self.email: str | None = None

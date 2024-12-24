@@ -15,9 +15,10 @@ class Dialogs:
     DYN_DIALOG_ITEM = 8
     DYN_DIALOG_IMAGE_UPLOAD = 9
     DYN_DIALOG_TEXT_INPUT = 10
-    DYN_DIALOG_OPTION_SELECT = 11
-    MENU = 12
-    START = 13
+    DYN_DIALOG_OPTION_SELECT = 11,
+    DYN_DIALOG_PREV_ITEM = 12
+    MENU = 13
+    START = 14
 
 class Actions:
     TYPING = 200
@@ -29,6 +30,7 @@ class Actions:
     END = 206
     SENDING = 207
     EDITING = 208
+    BACK = 209
 
 class Variables:
     SERVICE_DESCRIPTION = 100
@@ -51,3 +53,4 @@ class Variables:
     FIRST_START = 117
     HANDLED_DATA = 128
     FALLBACK_DIALOG_TRACE = 129
+    USER_SERVICE_TICKET = 130

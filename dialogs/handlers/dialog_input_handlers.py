@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 
 
 async def handle_text_input(update: "Update", context: "ContextTypes.DEFAULT_TYPE", bot: "Bot") -> int:
-
     if update.message is None:
         return Actions.END
     if update.message.text is None:
@@ -19,7 +18,6 @@ async def handle_text_input(update: "Update", context: "ContextTypes.DEFAULT_TYP
 
 
 async def cancel_text_input(update: "Update", context: "ContextTypes.DEFAULT_TYPE", bot: "Bot") -> int:
-
     if update.message is None:
         return Actions.END
     if update.message.text is None:

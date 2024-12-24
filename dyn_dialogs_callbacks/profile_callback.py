@@ -5,11 +5,10 @@ if TYPE_CHECKING:
     from telegram import Update
     from telegram.ext import ContextTypes
     from bot import Bot
-    from models import Dialog
+    from entities.dialog import Dialog
 
 from constants import Variables
 
-# Utility function for validation
 def is_valid_name(name: str) -> bool:
     return name.isalpha() and len(name) < 30 and " " not in name
 
@@ -37,15 +36,15 @@ async def profile_callback(
                     await bot.send_message(
                         update,
                         context,
-                        "Invalid input. Names must be one word, contain only letters, and be less than 30 characters.",
+                        "❌ <b>Некорректный ввод.</b>\nИмена должны состоять из одного слова, содержать только буквы и быть длиной менее 30 символов.",
                         dynamic=False
                     )
                     return Dialogs.DYN_DIALOG_ITEM
 
                 if item_id == 0:
-                    user.last_name = answer
-                elif item_id == 1:
                     user.first_name = answer
+                elif item_id == 1:
+                    user.last_name = answer
                 elif item_id == 2:
                     user.middle_name = answer
             elif item_id == 3:

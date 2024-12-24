@@ -22,4 +22,4 @@ async def start_poll_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYP
         ),
     )
 
-    return Dialogs.FEEDBACK
+    return Dialogs.POLL

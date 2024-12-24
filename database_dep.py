@@ -1,6 +1,6 @@
 import sqlite3
 
-from models import Feedback, Dialog, Question, ServiceTicket, User, Answer
+from entities import Feedback, Dialog, Question, ServiceTicket, User, Answer
 from datetime import datetime
 
 class Database:
@@ -43,7 +43,7 @@ class Database:
             (
                 user.id,
                 user.username,
-                user.role if user.role else -1,
+                user.role if user.role else 5,
                 user.first_name,
                 user.last_name,
                 user.middle_name,

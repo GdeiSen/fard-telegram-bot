@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE", bot: "Bot") -> int | str:
 
     bot.router.set_parent_item(context, Dialogs.DYN_DIALOG_ITEM)
-    keyboard = bot.create_keyboard([[("back", Dialogs.MENU)]])
     dialog = bot.local_storage.get(context, Variables.ACTIVE_DYN_DIALOG)
 
     if dialog is None:
@@ -26,9 +25,6 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
     active_items = [items[i] for i in active_sequence.items_ids]
     active_item = active_items[active_sequence_item_index]
     args = None
-
-    trace_item = str(active_sequence_id) + ":" + str(active_item.id)
-    bot.router.add_trace_item(context, trace_item)
 
     if update.callback_query and update.callback_query.data is not None:
         callback_data = update.callback_query.data.split(":")
@@ -47,20 +43,6 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
 
     fallback_item = bot.router.get_entry_point_item(context) or -1
 
-    # if answer:
-    #     await bot.dyn_dialog_handlers_manager.handle(
-    #         fallback_item,
-    #         bot,
-    #         update,
-    #         context,
-    #         dialog,
-    #         active_sequence.id,
-    #         active_item.id,
-    #         args,
-    #         answer,
-    #         0
-    #     )
-
     if args is not None or handled_data:
         state = 0
         index = active_items.index(active_item)
@@ -75,6 +57,10 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
             bot.local_storage.set(context, Variables.ACTIVE_DIALOG_SEQUENCE_ITEM_INDEX, 0)
         else:
             state = 1
+            
+        trace_item = str(active_sequence_id) + ":" + str(active_sequence_item_index)
+        bot.router.add_trace_item(context, trace_item)
+        
 
         await bot.dyn_dialog_handlers_manager.handle(
             fallback_item,
@@ -90,6 +76,7 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
         )
 
         if state == 1: return fallback_item
+        
 
         active_sequence_id = bot.local_storage.get(context, Variables.ACTIVE_DIALOG_SEQUENCE_ID)
         active_sequence_item_index = bot.local_storage.get(context, Variables.ACTIVE_DIALOG_SEQUENCE_ITEM_INDEX) or 0
@@ -112,12 +99,12 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
 
     fallback_item = bot.router.get_entry_point_item(context) or -1
 
-    keyboard = bot.create_keyboard(
-        [[button, ("cancel", fallback_item)]]
-    )
+    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
+    
     item_text = active_item.text if active_item else "---"
     await bot.send_message(update, context, item_text, keyboard)
-    return Dialogs.DYN_DIALOG_ITEM
+    return Dialogs.SERVICE
 
 
 async def start_dyn_dialog_typing_subdialog( update: "Update", context: "ContextTypes.DEFAULT_TYPE", bot: "Bot") -> int:
@@ -135,7 +122,8 @@ async def start_dyn_dialog_typing_subdialog( update: "Update", context: "Context
     active_item_id = active_sequence.items_ids[active_sequence_item_index]
     active_item = items.get(active_item_id)
     fallback_item = bot.router.get_entry_point_item(context) or -1
-    keyboard = bot.create_keyboard([[("exit", fallback_item)]])
+    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
 
     await bot.send_message(
         update, context, "multi_dialog_item_text_handler_prompt", keyboard, payload=[active_item.text]
@@ -171,8 +159,8 @@ async def start_dyn_dialog_select_subdialog(update: "Update", context: "ContextT
     keyboard_rows = []
     for row in sorted(options_by_row.keys()):
         keyboard_rows.append(options_by_row[row])
-
-    keyboard_rows.append([("exit", fallback_item)])
+    if(dialog.trace): keyboard_rows.append([("cancel", fallback_item),("back", Actions.BACK)])
+    else: keyboard_rows.append([("cancel", fallback_item)])
 
     keyboard = bot.create_keyboard(keyboard_rows)
 
@@ -199,10 +187,47 @@ async def start_dyn_dialog_upload_subdialog( update: "Update", context: "Context
     active_item = items.get(active_item_index)
     fallback_item = bot.router.get_entry_point_item(context) or -1
 
-    keyboard = bot.create_keyboard([[("exit", fallback_item)]])
+    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
 
     await bot.send_message(
         update, context, "multi_dialog_item_text_handler_prompt ", keyboard, payload=[active_item.text]
     )
 
     return Actions.UPLOADING
+
+async def start_prev_dyn_dialog( update: "Update", context: "ContextTypes.DEFAULT_TYPE", bot: "Bot") -> int:
+    dialog = bot.local_storage.get(context, Variables.ACTIVE_DYN_DIALOG)
+    if dialog is None:
+        return Actions.END
+
+    sequences = dialog.sequences
+    items = dialog.items
+    options = dialog.options
+
+    active_sequence_id = bot.local_storage.get(context, Variables.ACTIVE_DIALOG_SEQUENCE_ID) or 0
+    active_sequence_item_index = bot.local_storage.get(context, Variables.ACTIVE_DIALOG_SEQUENCE_ITEM_INDEX) or 0
+    active_sequence = sequences.get(active_sequence_id)
+    active_item_index = active_sequence.items_ids[active_sequence_item_index]
+    active_item = items.get(active_item_index)
+    parent_item = bot.router.get_parent_item(context)
+    entry_item = bot.router.get_entry_point_item(context)
+    trace_item = bot.router.pop_previous_trace_item(context)
+    
+    if trace_item is None:
+        return Actions.END
+    
+    print(parent_item, entry_item, trace_item)
+    
+    if trace_item == parent_item or trace_item == entry_item:
+        bot.local_storage.set(context, Variables.ACTIVE_DIALOG_SEQUENCE_ID, 0)
+        bot.local_storage.set(context, Variables.ACTIVE_DIALOG_SEQUENCE_ITEM_INDEX, 0)
+        return await bot.router.execute_entry_point(update, context, bot)
+    else: 
+        trace_item_sequence, trace_sequence_item_index = trace_item.split(":")
+        trace_item_sequence = int(trace_item_sequence)
+        trace_sequence_item_index = int(trace_sequence_item_index)
+        bot.local_storage.set(context, Variables.ACTIVE_DIALOG_SEQUENCE_ID, trace_item_sequence)
+        bot.local_storage.set(context, Variables.ACTIVE_DIALOG_SEQUENCE_ITEM_INDEX, trace_sequence_item_index)
+        
+    return await bot.router.execute_parent(update, context, bot)
