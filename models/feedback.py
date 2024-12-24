@@ -12,7 +12,7 @@ class FeedbackModel(Base):
     dialog_id = Column(Integer, nullable=False)
     sequence_id = Column(Integer, nullable=False)
     item_id = Column(Integer, nullable=False)
-    answer = Column(String, nullable=False)
+    answer = Column(String(255), nullable=False)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
