@@ -99,7 +99,7 @@ async def start_dyn_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
 
     fallback_item = bot.router.get_entry_point_item(context) or -1
 
-    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    if(dialog.trace): keyboard = bot.create_keyboard([[("back", Actions.BACK)]])
     else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
     
     item_text = active_item.text if active_item else "---"
@@ -122,7 +122,7 @@ async def start_dyn_dialog_typing_subdialog( update: "Update", context: "Context
     active_item_id = active_sequence.items_ids[active_sequence_item_index]
     active_item = items.get(active_item_id)
     fallback_item = bot.router.get_entry_point_item(context) or -1
-    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    if(dialog.trace): keyboard = bot.create_keyboard([[("back", Actions.BACK)]])
     else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
 
     await bot.send_message(
@@ -159,7 +159,7 @@ async def start_dyn_dialog_select_subdialog(update: "Update", context: "ContextT
     keyboard_rows = []
     for row in sorted(options_by_row.keys()):
         keyboard_rows.append(options_by_row[row])
-    if(dialog.trace): keyboard_rows.append([("cancel", fallback_item),("back", Actions.BACK)])
+    if(dialog.trace): keyboard_rows.append([("back", Actions.BACK)])
     else: keyboard_rows.append([("cancel", fallback_item)])
 
     keyboard = bot.create_keyboard(keyboard_rows)
@@ -187,7 +187,7 @@ async def start_dyn_dialog_upload_subdialog( update: "Update", context: "Context
     active_item = items.get(active_item_index)
     fallback_item = bot.router.get_entry_point_item(context) or -1
 
-    if(dialog.trace): keyboard = bot.create_keyboard([[("cancel", fallback_item),("back", Actions.BACK)]])
+    if(dialog.trace): keyboard = bot.create_keyboard([[("back", Actions.BACK)]])
     else: keyboard = bot.create_keyboard([[("cancel", fallback_item)]])
 
     await bot.send_message(
