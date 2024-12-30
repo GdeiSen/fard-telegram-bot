@@ -12,15 +12,6 @@ async def start_app_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
         payload = context.args[0] if context.args else None
         user_id = update.message.from_user.id
         user = await bot.user_service.get_user(user_id)
-        first_start = True
-        bot.local_storage.set(context, Variables.FIRST_START, True)
-        if user is None:
-            user = User(user_id, update.message.from_user.username, None)
-            user.object = "Норд Сити"
-            user = await bot.user_service.create_user(user)
-        else:
-            bot.local_storage.set(context, Variables.FIRST_START, False)
-            first_start = False
         if user is None:
             user = User(user_id, update.message.from_user.username, None)
             user.object = "Норд Сити"

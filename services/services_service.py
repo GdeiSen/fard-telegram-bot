@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from database_manager import DatabaseManager
     
 from models import ServiceTicketModel, service_ticket_to_model, model_to_service_ticket
+from entities.service_ticket import ServiceTicket
 
 class ServicesService:
     def __init__(self, db: "DatabaseManager"):
@@ -21,7 +22,7 @@ class ServicesService:
             print(f"Error in get_service_tickets: {e}")
             return []
 
-    def create_service_ticket(self, service: "ServiceTicketModel") -> "ServiceTicketModel":
+    def create_service_ticket(self, service: "ServiceTicket") -> "ServiceTicket":
         try:
             session: Session = self.db.session
             service_model = service_ticket_to_model(service)
@@ -39,7 +40,7 @@ class ServicesService:
             raise e
             return service
 
-    def update_service_ticket(self, service: "ServiceTicketModel") -> "ServiceTicketModel":
+    def update_service_ticket(self, service: "ServiceTicket") -> "ServiceTicket":
         try:
             session: Session = self.db.session
             service_model = service_ticket_to_model(service)
@@ -51,7 +52,7 @@ class ServicesService:
             print(f"Error in update_service_ticket: {e}")
             return service
 
-    def get_service_ticket(self, service_id: int) -> "ServiceTicketModel | None":
+    def get_service_ticket(self, service_id: int) -> "ServiceTicket | None":
         try:
             session: Session = self.db.session
             service_model = session.query(ServiceTicketModel).filter_by(id=service_id).first()
