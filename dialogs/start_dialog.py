@@ -21,7 +21,9 @@ async def start_app_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
         else:
             bot.local_storage.set(context, Variables.FIRST_START, False)
             first_start = False
-        if first_start is True:
+        if user is None:
+            user = User(user_id, update.message.from_user.username, None)
+            user.object = "Норд Сити"
             if payload == str(Roles.LPR):
                 user.role = Roles.LPR
                 await bot.send_message(update, context, "profile_identification_completed", dynamic=False)
@@ -30,7 +32,7 @@ async def start_app_dialog(update: "Update", context: "ContextTypes.DEFAULT_TYPE
                 await bot.send_message(update, context, "profile_identification_completed", dynamic=False)
             else:
                 user.role = Roles.MA
-            await bot.user_service.update_user(user)
+            user = await bot.user_service.create_user(user)
             await bot.send_message(
                 update,
                 context,

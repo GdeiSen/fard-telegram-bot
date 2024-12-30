@@ -35,7 +35,7 @@ class UsersService:
                 return await self.update_user(user)
             session.add(user_model)
             session.commit()
-            return user
+            return await self.get_user(user.id)
         except SQLAlchemyError as e:
             session.rollback()
             print(f"Error in create_user: {e}")
@@ -47,7 +47,7 @@ class UsersService:
             session: Session = self.db.session
             session.merge(user_model)
             session.commit()
-            return user
+            return await self.get_user(user.id)
         except SQLAlchemyError as e:
             session.rollback()
             print(f"Error in update_user: {e}")
