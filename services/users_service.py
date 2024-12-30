@@ -32,7 +32,7 @@ class UsersService:
             session: Session = self.db.session
             existing_user_model = session.query(UserModel).filter_by(id=user_model.id).first()
             if existing_user_model:
-                return await self.update_user(user_model)
+                return await self.update_user(user)
             session.add(user_model)
             session.commit()
             return user
