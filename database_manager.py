@@ -45,16 +45,45 @@ class DatabaseManager:
             await self._add_indices(conn)
             
     async def _add_indices(self, conn):
-        """Add any necessary indices to the database tables"""
-        # Session token index for fast lookups
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_sessions_token ON sessions (token)"
-        ))
+        """
+        Add necessary indices to database tables for performance optimization.
         
-        # UserAuth user_id index
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_user_auth_user_id ON user_auth (user_id)"
-        ))
+        This method handles database-specific syntax differences for index creation:
+        - MySQL versions prior to 5.7.4 don't support "IF NOT EXISTS" in CREATE INDEX
+        - Uses try-catch approach for cross-database compatibility
+        - Silently ignores errors when index already exists (duplicate key name error)
+        
+        Args:
+            conn: Active database connection for executing SQL statements
+        """
+        # List of indices to create with their SQL statements
+        indices = [
+            {
+                'name': 'ix_sessions_token',
+                'sql': 'CREATE INDEX ix_sessions_token ON sessions (token)',
+                'purpose': 'Session token index for fast authentication lookups'
+            },
+            {
+                'name': 'ix_user_auth_user_id', 
+                'sql': 'CREATE INDEX ix_user_auth_user_id ON user_auth (user_id)',
+                'purpose': 'UserAuth user_id index for efficient user authentication queries'
+            }
+        ]
+        
+        # Create each index, handling potential duplicate key errors gracefully
+        for index_info in indices:
+            try:
+                await conn.execute(text(index_info['sql']))
+            except Exception as e:
+                # Check if error is due to index already existing
+                error_message = str(e).lower()
+                if any(duplicate_indicator in error_message for duplicate_indicator in 
+                       ['duplicate key name', 'already exists', 'duplicate']):
+                    # Index already exists, continue silently
+                    continue
+                else:
+                    # Re-raise unexpected errors for proper debugging
+                    raise e
     
     async def close(self):
         """Close the database connection"""

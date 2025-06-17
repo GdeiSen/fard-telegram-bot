@@ -91,3 +91,14 @@ ehthumbs.db
 .ropeproject/
 
 *.dbnode_modules/
+
+# Database files
+*.db
+
+# Next.js build files
+.next/
+build/
+dist/
+
+# Logs
+*.log
