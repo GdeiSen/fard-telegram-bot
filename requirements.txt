@@ -1,0 +1,10 @@
+flask
+werkzeug
+flask-cors
+sqlalchemy>=2.0.0
+aiosqlite
+asyncio
+pyjwt
+gunicorn
+cryptography
+aiohttp
