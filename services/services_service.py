@@ -244,3 +244,78 @@ class ServicesService:
                 'new_tickets': [],
                 'in_progress_tickets': []
             }
+
+    async def complete_all_pending_tickets(self, admin_id: int) -> dict:
+        """
+        Завершить все тикеты со статусами 0, 1, 2 (установить статус 3 - выполнено)
+        
+        Args:
+            admin_id (int): ID администратора, выполняющего массовое завершение
+            
+        Returns:
+            dict: Статистика по обновленным тикетам
+        """
+        try:
+            async with self.db.Session() as session:
+                # Получаем все тикеты с незавершенными статусами
+                result = await session.execute(
+                    select(ServiceTicket).filter(ServiceTicket.status.in_([0, 1, 2]))
+                )
+                pending_tickets = result.scalars().all()
+                
+                if not pending_tickets:
+                    return {
+                        'success': True,
+                        'updated_count': 0,
+                        'message': 'Нет тикетов для завершения'
+                    }
+                
+                current_time = now()
+                updated_tickets = []
+                
+                # Добавляем записи о завершении для каждого тикета
+                for ticket in pending_tickets:
+                    # Добавляем запись в историю статусов (статус тикета НЕ изменяется)
+                    new_status = ServiceTicketStatus(
+                        id=None,
+                        ticket_id=ticket.id,
+                        status_type=3,
+                        admin_id=admin_id,
+                        message_id=None,
+                        assignee=None,
+                        created_at=current_time
+                    )
+                    
+                    session.add(new_status)
+                    updated_tickets.append({
+                        'ticket_id': ticket.id,
+                        'ticket_status': ticket.status,
+                        'completion_status_added': 3
+                    })
+                
+                await session.commit()
+                
+                # Уведомляем об изменениях
+                if self.event_manager:
+                    await self.event_manager.emit('bulk_tickets_completed', {
+                        'count': len(updated_tickets),
+                        'admin_id': admin_id,
+                        'tickets': updated_tickets
+                    })
+                    await self.event_manager.emit('ticket_stats_changed')
+                
+                return {
+                    'success': True,
+                    'updated_count': len(updated_tickets),
+                    'updated_tickets': updated_tickets,
+                    'message': f'Успешно завершено {len(updated_tickets)} тикетов'
+                }
+                
+        except SQLAlchemyError as e:
+            print(f"Error in complete_all_pending_tickets: {e}")
+            return {
+                'success': False,
+                'updated_count': 0,
+                'error': str(e),
+                'message': 'Ошибка при массовом завершении тикетов'
+            }
