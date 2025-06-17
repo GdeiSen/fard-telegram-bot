@@ -18,7 +18,8 @@ from dialogs import (
     start_service_dialog,
     start_poll_dialog,
     start_service_feedback_dialog,
-    start_spaces_dialog
+    start_spaces_dialog,
+    start_test_dialog
 )
 from dialogs.stats_dialog import start_stats_dialog
 from managers import (
@@ -177,6 +178,7 @@ class Bot:
         self.managers.router.add_handler(Dialogs.SERVICE_FEEDBACK, start_service_feedback_dialog)
         self.managers.router.add_handler(Dialogs.SPACES, start_spaces_dialog)
         self.managers.router.add_handler(Dialogs.STATS, start_stats_dialog)
+        self.managers.router.add_handler(Dialogs.TEST, start_test_dialog)
         self.application.add_handler(CommandHandler("start", self.handle_command))
         self.application.add_handler(CommandHandler("menu", self.handle_command))
         self.application.add_handler(CommandHandler("service", self.handle_command))
@@ -186,6 +188,7 @@ class Bot:
         self.application.add_handler(CommandHandler("service_feedback", self.handle_command))
         self.application.add_handler(CommandHandler("spaces", self.handle_command))
         self.application.add_handler(CommandHandler("stats", self.handle_command))
+        self.application.add_handler(CommandHandler("test", self.handle_command))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
@@ -206,7 +209,8 @@ class Bot:
                 "feedback": Dialogs.FEEDBACK,
                 "service_feedback": Dialogs.SERVICE_FEEDBACK,
                 "spaces": Dialogs.SPACES,
-                "stats": Dialogs.STATS
+                "stats": Dialogs.STATS,
+                "test": Dialogs.TEST
             }
             if command in dialog_map:
                 dialog_id = dialog_map[command]
@@ -216,6 +220,7 @@ class Bot:
         except Exception as e:
             print(f"Error handling command: {e}")
             await self.managers.router.execute(Dialogs.MENU, update, context)
+
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:

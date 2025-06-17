@@ -8,3 +8,4 @@ from dialogs.service_dialog import start_service_dialog
 from dialogs.service_feedback_dialog import start_service_feedback_dialog
 from dialogs.spaces_dialog import start_spaces_dialog
 from dialogs.stats_dialog import start_stats_dialog
+from dialogs.test_dialog import start_test_dialog

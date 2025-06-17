@@ -369,15 +369,24 @@ class StatsManager(BaseManager):
             )
             
             # Закрепляем сообщение
+            # ВАЖНО: В группах и супергруппах Telegram бот должен:
+            # 1. Быть администратором чата
+            # 2. Иметь право "can_pin_messages" (не путать с "can_manage_messages")
+            # 3. В супергруппах также может потребоваться право "can_manage_chat"
             try:
                 await self.bot.application.bot.pin_chat_message(
                     chat_id=int(chat_id),
                     message_id=message.message_id,
-                    disable_notification=True
+                    disable_notification=True  # Отключаем уведомление о закреплении
                 )
                 print("Stats message pinned successfully")
             except Exception as e:
+                # Обычные причины ошибки "Not enough rights to manage pinned messages":
+                # - Бот не является администратором группы
+                # - У бота нет права "can_pin_messages" в настройках администратора
+                # - В супергруппах может потребоваться дополнительное право "can_manage_chat"
                 print(f"Failed to pin message: {e}")
+                print("Hint: Check if bot is admin with 'can_pin_messages' permission in the group")
             
             # Сохраняем информацию о новом сообщении
             self.save_message_info(int(chat_id), message.message_id)

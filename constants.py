@@ -23,6 +23,7 @@ class Dialogs:
     SERVICE_COMPLAINT = 16
     SPACES = 30
     STATS = 31
+    TEST = 32
 
 class Actions:
     TYPING = 200
